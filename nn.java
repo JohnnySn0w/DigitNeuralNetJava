@@ -19,9 +19,9 @@
 import java.io.FileReader; // self-explanatory
 import java.io.FileWriter;
 import java.io.BufferedReader; // buffering file input
-import java.io.BufferedWriter;
+// import java.io.BufferedWriter;
 import java.io.IOException; // error handling
-import java.util.ArrayList;
+// import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Scanner; //user input
 
@@ -30,16 +30,18 @@ import java.util.Scanner; //user input
 // store trained network in json or something
 public class nn {
   /*****************
-   * general logic *
+   * general vars  *
    *****************/
   private static Boolean isLoaded = false; //class var to tell other parts if a nn is loaded
   private static int n = 20; //layer 1 length, between 15 and 30
   private static int k = 10; //layer 2 length, 10 for the 10 digits 0-9
   private static int j = 784; //number of input layer inputs
-  private static double[] neurNet = new double[(j+1)*n+(n+1)*k];
-  //this is a bit of a 3d graphics hack, setting what would be a multidimensional array into a smaller array for better access times.
-  // so what I'm doing here is, instead of having separate/nested arrays for 
-
+  private static int arrySize = (j+1)*n+(n+1)*k;
+  private static double[] neurNet = new double[arrySize];
+  /*
+    this is a bit of a hack I borrow from 3d graphics, setting what would 
+    be a multidimensional array into a smaller array for better access times.
+  */
   /*
   the input layer just passes the input value, then each neuron on the next layer, 
   takes all 784 inputs as an input, with a weight per input(so the weights are per incoming neuron, 
@@ -49,6 +51,10 @@ public class nn {
   so if I access index 15721, that's the 2nd layer, bias for the first neuron
   */
   // why even bother with a 1d array, seems complex? Speed.
+
+  /*******
+  * MAIN *
+  ********/
   public static void main(String[] args) {
     nn.menu();
   }
@@ -77,6 +83,18 @@ public class nn {
   * load an existing nn *
   ***********************/
   static boolean loadNet() {
+    String line = "";
+    try{ //try reading in the file
+      FileReader nnFile = new FileReader("./neuralNet.txt");
+      while((line = nnFile.readLine()) != null) {
+        double[] doubleValues = Arrays.stream(nnBuffer).mapToDouble(Double::parseDouble).toArray();
+      }
+      netFile.close();
+    }
+    catch (IOException e) {
+      e.printStackTrace(); //debugging
+      return false;
+    }
     return true;
   }
 
@@ -84,17 +102,18 @@ public class nn {
   * store current nn *
   ***********************/
   static boolean storeNet() {
-    FileWriter netFile = new FileWriter("neuralNet.csv", false);
-    BufferedWriter writeBuffer = new BufferedWriter(netFile);
     try {
+      FileWriter netFile = new FileWriter("neuralNet.txt", false);
       String stringifiedNet = Arrays.toString(nn.neurNet);
-      BufferedWriter.write(stringifiedNet, 0, stringifiedNet.length());
+      stringifiedNet.replaceAll("^.|.$", "");
+      System.out.println(stringifiedNet);
+      netFile.write(stringifiedNet);
+      netFile.close();
     }
     catch (IOException e) {
       e.printStackTrace(); //debugging
       return false;
     }
-    writeBuffer.close()
     return true;
   }
 
