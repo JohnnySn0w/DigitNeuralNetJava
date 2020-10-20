@@ -19,11 +19,12 @@
 import java.io.FileReader; // self-explanatory
 import java.io.FileWriter;
 import java.io.BufferedReader; // buffering file input
-// import java.io.BufferedWriter;
 import java.io.IOException; // error handling
 // import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Scanner; //user input
+import java.util.stream.Stream;
 
 
 
@@ -38,6 +39,10 @@ public class nn {
   private static int j = 784; //number of input layer inputs
   private static int arrySize = (j+1)*n+(n+1)*k;
   private static double[] neurNet = new double[arrySize];
+  private static String nnetFile = "./neuralNet.csv";
+  private static String nnTraining = "./mnist_train.csv";
+  private static String nnTest = "./mnist_test.csv";
+  private static String[] dataset;
   /*
     this is a bit of a hack I borrow from 3d graphics, setting what would 
     be a multidimensional array into a smaller array for better access times.
@@ -63,36 +68,43 @@ public class nn {
   * Read in a dataset *
   *********************/
   //done
-  static String[] parseDataset(String datasetURI) {
+  static void parseDataset(String datasetURI, int datasetSize) {
     String line = ""; //instantiation for later, this will hold each full line of pixel values
-    String[] imagePixels = new String[60000]; // each row is an image
+    dataset = new String[datasetSize]; // each row is an image
     try(BufferedReader buffer = new BufferedReader(new FileReader(datasetURI))) { //try reading in the file
       int i = 0;
       while((line = buffer.readLine()) != null) {
-        imagePixels[i] = line; // each line is 1/60000 of the set
+        dataset[i] = line; // each line is 1/60000 of the set
         i++;
       }
     }
     catch (IOException e) {
       e.printStackTrace(); //debugging
     }
-    return imagePixels;
+    // System.out.println(nn.dataset[0]);
   }
 
   /**********************
   * load an existing nn *
   ***********************/
+  //done(excpet maybe not)
   static boolean loadNet() {
     String line = "";
-    try{ //try reading in the file
-      FileReader nnFile = new FileReader("./neuralNet.txt");
-      while((line = nnFile.readLine()) != null) {
-        double[] doubleValues = Arrays.stream(nnBuffer).mapToDouble(Double::parseDouble).toArray();
-      }
-      netFile.close();
+    String delimiter = ", ";
+    try {
+      FileReader nnFile = new FileReader(nnetFile);
+      BufferedReader nnBuffer = new BufferedReader(nnFile);
+      line = nnBuffer.readLine();
+      neurNet = Arrays.stream(line.split(delimiter)).mapToDouble(Double::parseDouble).toArray();
+      System.out.println(neurNet.length);
+      nnBuffer.close();
     }
     catch (IOException e) {
-      e.printStackTrace(); //debugging
+      System.out.println("error with reading file");
+      return false;
+    }
+    catch (NullPointerException e) {
+      System.out.println("No dataset detected in current directory");
       return false;
     }
     return true;
@@ -101,12 +113,12 @@ public class nn {
   /**********************
   * store current nn *
   ***********************/
+  // done
   static boolean storeNet() {
     try {
-      FileWriter netFile = new FileWriter("neuralNet.txt", false);
+      FileWriter netFile = new FileWriter(nnetFile, false);
       String stringifiedNet = Arrays.toString(nn.neurNet);
-      stringifiedNet.replaceAll("^.|.$", "");
-      System.out.println(stringifiedNet);
+      stringifiedNet = stringifiedNet.replaceAll("^.|.$", "");
       netFile.write(stringifiedNet);
       netFile.close();
     }
@@ -117,14 +129,54 @@ public class nn {
     return true;
   }
 
+   /**********************
+  *  initialize net  *
+  ***********************/
+  static void initNet() {
+    //set random wieghts n biasses
+    // double[] Arrays.stream(dataset[i].split(delimiter)).mapToDouble(Double::parseDouble).toArray();
+    for(int i = 0; i < neurNet.length; i++) {
+      neurNet[i] = Math.random();
+    }
+  }
 
+  /*
 
+    MIGHT HELP TO MAKE THE WHOLE THING RECURSE
+  */
+  /**********************
+  *  sim layers  *
+  ***********************/
+  //done
+  static void layerActivation() {
+    for(int i = 0; i < nn.n; i++) {
+      neuronActivation(inputs, weights, bias);
+    }
+  }
+
+  /********************************
+  *  simulate a neuron on the net  *
+  **********************************/
+  static double neuronActivation(double[] inputs, double[] weights, double bias) {
+    //take the weights and bias array and math it with the inputs
+    //a neuron does a func to the
+    double sigmoid = 0.0;
+    for(int i = 0; i < weights.length; i++) {
+      sigmoid += inputs[i] * weights[i];
+    }
+
+    // sigmoid = Arrays.stream(inputs)
+    // .mapToInt(input, weight -> input * weights)
+    // .sum();
+
+    return sigmoid += 1/(1 + Math.exp(-sigmoid-bias)); // sigmoidd
+  }
 
 
   /***************
   * Menu Options *
   ****************/
-  static void menu(){
+  static void menu() {
     String extras = isLoaded ? ("[3] Display network accuracy on TRAINING data\n" +
     "[4] Display network accuracy on TESTING data\n" +
     "[5] Save the network state to file\n") : "";
@@ -145,9 +197,8 @@ public class nn {
         System.exit(0);
         break;
       case "1":
-        String[] trainingDataset = nn.parseDataset("./mnist_train.csv");
+        nn.parseDataset(nnTraining, 60000);
         System.out.println("training");
-        System.out.println(trainingDataset[0]);
         break;
       case "2":
         System.out.println("loading");
@@ -155,11 +206,13 @@ public class nn {
         break;
       case "3": //test against training data
         if(isLoaded) {
+          nn.parseDataset(nnTraining, 60000);
           System.out.println("3 runs");
         }
         break;
       case "4": //test against testing data
         if(isLoaded) {
+          nn.parseDataset(nnTest, 60000);
           System.out.println("4 runs");
         }
         break;
@@ -173,7 +226,6 @@ public class nn {
         nn.menu();
         break;
     }
-    System.out.println("size of nn: " + neurNet.length+'\n');
     nn.menu(); //call the menu again so it refreshes
     input.close(); //close the scanner(this seems to be good practice/necessary)
   }
