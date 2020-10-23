@@ -22,9 +22,7 @@ import java.io.BufferedReader; // buffering file input
 import java.io.IOException; // error handling
 // import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Map;
 import java.util.Scanner; //user input
-import java.util.stream.Stream;
 
 
 
@@ -138,6 +136,7 @@ public class nn {
     for(int i = 0; i < neurNet.length; i++) {
       neurNet[i] = Math.random();
     }
+    isLoaded = true;
   }
 
   /*
@@ -147,11 +146,10 @@ public class nn {
   /**********************
   *  sim layers  *
   ***********************/
-  //done
   static void layerActivation() {
-    for(int i = 0; i < nn.n; i++) {
-      neuronActivation(inputs, weights, bias);
-    }
+    // for(int i = 0; i < nn.n; i++) {
+    //   neuronActivation(inputs, weights, bias);
+    // }
   }
 
   /********************************
@@ -197,7 +195,8 @@ public class nn {
         System.exit(0);
         break;
       case "1":
-        nn.parseDataset(nnTraining, 60000);
+        // nn.parseDataset(nnTraining, 60000);
+        initNet();
         System.out.println("training");
         break;
       case "2":
