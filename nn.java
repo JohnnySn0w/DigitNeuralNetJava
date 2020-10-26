@@ -21,6 +21,7 @@ import java.io.FileWriter;
 import java.io.BufferedReader; // buffering file input
 import java.io.IOException; // error handling
 // import java.util.ArrayList;
+// import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Scanner; //user input
 
@@ -32,15 +33,17 @@ public class nn {
    * general vars  *
    *****************/
   private static Boolean isLoaded = false; //class var to tell other parts if a nn is loaded
-  private static int n = 20; //layer 1 length, between 15 and 30
-  private static int k = 10; //layer 2 length, 10 for the 10 digits 0-9
-  private static int j = 784; //number of input layer inputs
-  private static int arrySize = (j+1)*n+(n+1)*k;
+  // private static int j = 784; //number of input layer inputs
+  // private static int n = 20; //layer 1 length, between 15 and 30
+  // private static int k = 10; //layer 2 length, 10 for the 10 digits 0-9
+  private static int[] layers = {784, 20, 10};
+  private static int arrySize = (layers[0]+1)*layers[1]+(layers[1]+1)*layers[2];
   private static double[] neurNet = new double[arrySize];
   private static String nnetFile = "./neuralNet.csv";
   private static String nnTraining = "./mnist_train.csv";
   private static String nnTest = "./mnist_test.csv";
   private static String[] dataset;
+  private static double[][] layerOutputs = new double[layers.length-1][]; //arrayList allows for just enough nodes
   /*
     this is a bit of a hack I borrow from 3d graphics, setting what would 
     be a multidimensional array into a smaller array for better access times.
@@ -55,6 +58,8 @@ public class nn {
   */
   // why even bother with a 1d array, seems complex? Speed.
 
+  //THE FIRST ELEMENT OF EACH ROW IS THE ANSWER, DONT COMPUTE IT
+
   /*******
   * MAIN *
   ********/
@@ -62,9 +67,9 @@ public class nn {
     nn.menu();
   }
 
-  /********************
-  * Read in a dataset *
-  *********************/
+  /*******************************
+  * Store and Load datasets/nets *
+  ********************************/
   //done
   static void parseDataset(String datasetURI, int datasetSize) {
     String line = ""; //instantiation for later, this will hold each full line of pixel values
@@ -82,9 +87,6 @@ public class nn {
     // System.out.println(nn.dataset[0]);
   }
 
-  /**********************
-  * load an existing nn *
-  ***********************/
   //done(excpet maybe not)
   static boolean loadNet() {
     String line = "";
@@ -108,9 +110,6 @@ public class nn {
     return true;
   }
 
-  /**********************
-  * store current nn *
-  ***********************/
   // done
   static boolean storeNet() {
     try {
@@ -127,9 +126,6 @@ public class nn {
     return true;
   }
 
-   /**********************
-  *  initialize net  *
-  ***********************/
   static void initNet() {
     //set random wieghts n biasses
     // double[] Arrays.stream(dataset[i].split(delimiter)).mapToDouble(Double::parseDouble).toArray();
@@ -139,35 +135,75 @@ public class nn {
     isLoaded = true;
   }
 
-  /*
+  /**************
+   * batches area *
+   **************/
 
-    MIGHT HELP TO MAKE THE WHOLE THING RECURSE
-  */
-  /**********************
-  *  sim layers  *
-  ***********************/
-  static void layerActivation() {
-    // for(int i = 0; i < nn.n; i++) {
-    //   neuronActivation(inputs, weights, bias);
-    // }
+  static double[][] generateBatches(){
+    //chop up the dataset using random and make 6 subsets of 10k each or whatever
+    //after finishing the initial bits, parameterize it
   }
 
-  /********************************
-  *  simulate a neuron on the net  *
-  **********************************/
-  static double neuronActivation(double[] inputs, double[] weights, double bias) {
+  // static double[] convertRowToDouble(String row){
+    
+  //   return ;
+  // }
+
+   /**********************
+  *  NN running functions  *
+  ***********************/
+  static void runNet(){
+    //init the layer lengths in jagged array
+    for(int layerIndex = 1; layerIndex < layers.length; layerIndex++){
+      layerOutputs[layerIndex-1] = new double[layers[layerIndex]]; //layerOutputs is layers-1 since we don't need to store l0
+      layerActivation(layerIndex);
+    }
+  }
+ 
+  static void layerActivation(int layerIndex) {
+    // split out the current layer from the network
+    //we only have 2 layers, so layer 1 and layer 2
+    //layer 0 is just the base inputs
+    int srcPos, destPos, length;
+    double[] inputs;
+    //assume layerindex is never less than 1 bc 0 is just inputs(no calc needed)
+    //works for any nnumber of layers(?)
+    if(layerIndex > 1){ //TODO: could simplify this logic if java does implicit bool stuff
+      srcPos = (layers[layerIndex-1]*(layers[layerIndex-2]+1)); //layer 1 nodes * weights + bias(elements per node) for layer 0 gives index of last element
+      destPos = 0;
+      length = layers[layerIndex]*(layers[layerIndex-1]+1);
+      int ending = length+srcPos-1;
+      System.out.println("start:"+srcPos+"end:"+ending+"size:"+length+"\n");//should be 15700 and 15909
+    } else {
+      srcPos = 0; //layer 1 starts at 0
+      destPos = 0;
+      length = (layers[1]*(layers[0]+1)); //last index before layer 2 starts
+      int ending = length+srcPos-1;
+      System.out.println("start:"+srcPos+"end:"+ending+"size:"+length+"\n"); //should be 0 and 15699
+      inputs = convertRowToDouble();
+    }
+    double[] layerWeightsNBiases = new double[length];  //this should be an entire set of weights+a bias for a layer
+    System.arraycopy(neurNet, srcPos, layerWeightsNBiases, destPos, length); 
+    for(int nodeIndex = 0; nodeIndex < nn.layers[1]; nodeIndex++) {
+      double[] inputs = convertRowToDouble(row);
+      neuronActivation(inputs, weights, bias, layerIndex, nodeIndex);
+    }
+  }
+
+  //done??
+  static void neuronActivation(double[] inputs, double[] weights, double bias, int layerIndex, int nodeIndex) {
     //take the weights and bias array and math it with the inputs
     //a neuron does a func to the
-    double sigmoid = 0.0;
+    double preSigmoid = 0.0;
     for(int i = 0; i < weights.length; i++) {
-      sigmoid += inputs[i] * weights[i];
+      preSigmoid += inputs[i] * weights[i];
     }
-
     // sigmoid = Arrays.stream(inputs)
     // .mapToInt(input, weight -> input * weights)
     // .sum();
-
-    return sigmoid += 1/(1 + Math.exp(-sigmoid-bias)); // sigmoidd
+    double sigmoid = 1/(1 + Math.exp((-preSigmoid)-bias));
+    nn.layerOutputs[layerIndex-1][nodeIndex] = sigmoid; //store neuron's output to layerOutputs
+    //its layerIndex-1 because of the lack of l0 in the layerOutputs, so everything is offset
   }
 
 
@@ -195,9 +231,10 @@ public class nn {
         System.exit(0);
         break;
       case "1":
-        // nn.parseDataset(nnTraining, 60000);
+        //make a net, train it on the training set
         initNet();
         System.out.println("training");
+        runNet();
         break;
       case "2":
         System.out.println("loading");
@@ -217,7 +254,6 @@ public class nn {
         break;
       case "5": //save net
         if(isLoaded) {
-          System.out.println("5 runs");
           nn.storeNet();
         }
         break;
