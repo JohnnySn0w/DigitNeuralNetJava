@@ -20,10 +20,13 @@ import java.io.FileReader; // self-explanatory
 import java.io.FileWriter;
 import java.io.BufferedReader; // buffering file input
 import java.io.IOException; // error handling
+import java.util.ArrayList;
 // import java.util.ArrayList;
 // import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Scanner; //user input
+// import java.util.stream.IntStream;
 
 
 
@@ -42,11 +45,11 @@ public class nn {
   private static String nnetFile = "./neuralNet.csv";
   private static String nnTraining = "./mnist_train.csv";
   private static String nnTest = "./mnist_test.csv";
-  private static String[] dataset;
+  private static ArrayList<String> dataset;
   private static double[][] layerOutputs = new double[layers.length-1][]; //arrayList allows for just enough nodes
+  private static int batchSize = 100; //how big batches should be
   /*
-    this is a bit of a hack I borrow from 3d graphics, setting what would 
-    be a multidimensional array into a smaller array for better access times.
+    Never do this again
   */
   /*
   the input layer just passes the input value, then each neuron on the next layer, 
@@ -56,7 +59,7 @@ public class nn {
   785*20 indices in is where layer 2 starts, which should be 21 per neuron, 21*10. The total array size should be (784+1)*20+(20+1)*10, which is 15910
   so if I access index 15721, that's the 2nd layer, bias for the first neuron
   */
-  // why even bother with a 1d array, seems complex? Speed.
+  // why even bother with a 1d array, seems complex? Speed. Because. IDK.
 
   //THE FIRST ELEMENT OF EACH ROW IS THE ANSWER, DONT COMPUTE IT
 
@@ -73,11 +76,11 @@ public class nn {
   //done
   static void parseDataset(String datasetURI, int datasetSize) {
     String line = ""; //instantiation for later, this will hold each full line of pixel values
-    dataset = new String[datasetSize]; // each row is an image
+    dataset = new ArrayList<String>(datasetSize); // each row is an image
     try(BufferedReader buffer = new BufferedReader(new FileReader(datasetURI))) { //try reading in the file
       int i = 0;
       while((line = buffer.readLine()) != null) {
-        dataset[i] = line; // each line is 1/60000 of the set
+        dataset.add(i, line); // each line is 1/60000 of the set
         i++;
       }
     }
@@ -135,59 +138,106 @@ public class nn {
     isLoaded = true;
   }
 
+  /*************************************
+   * stochastic gradient descent stuff *
+   *************************************/
+  static void stochasticGradientDescent(){
+    
+  }
+
+
   /**************
    * batches area *
    **************/
 
-  static double[][] generateBatches(){
-    //chop up the dataset using random and make 6 subsets of 10k each or whatever
-    //after finishing the initial bits, parameterize it
+  static void runBatches(){
+    // shuffle data, pass batchSize at a time to rows
+    // after finishing the initial bits, parameterize it
+    Collections.shuffle(dataset); //randomizes dataset order
+    for(int currIndex = 0; currIndex < dataset.size(); currIndex+=batchSize){
+      runBatch(currIndex);
+    }
   }
 
-  // static double[] convertRowToDouble(String row){
-    
-  //   return ;
-  // }
+  static void runBatch(int currIndex){
+    //call runNet with successive rows
+    while(currIndex < currIndex + batchSize){
+      runNet(currIndex);
+      currIndex++;
+    }
+  }
+
+  static double[] convertRowToDouble(String row){
+    return Arrays.stream(row.split(",")).mapToDouble(Double::parseDouble).toArray(); //does some cool java 8 stream processing
+  }
+
 
    /**********************
   *  NN running functions  *
   ***********************/
-  static void runNet(){
+
+  static void runNet(int rowIndex){
     //init the layer lengths in jagged array
-    for(int layerIndex = 1; layerIndex < layers.length; layerIndex++){
-      layerOutputs[layerIndex-1] = new double[layers[layerIndex]]; //layerOutputs is layers-1 since we don't need to store l0
-      layerActivation(layerIndex);
+    double[] row = convertRowToDouble(dataset.get(rowIndex)); //entire single mnist row
+    double[] inputImage = new double[layers[0]]; //image without correctNumber
+    int correctNumber = (int)row[0];
+    System.arraycopy(row, 1, inputImage, 0, layers[0]);
+    //normalize greyscale
+    for(int i = 0; i < inputImage.length; i++){
+      inputImage[i] /= 255.0; //assignment operators are the devil, and I am Faust
+    }
+    //layer 1
+    layerOutputs[0] = new double[layers[1]]; //layerOutputs is layers-1 since we don't need to store L0
+    layerActivation(1, inputImage);
+    //additional layers(should run once for 3 layers)
+    for(int layerIndex = 2; layerIndex < layers.length; layerIndex++){
+      layerOutputs[layerIndex-1] = new double[layers[layerIndex]]; //layerOutputs is layers-1 since we don't need to store L0
+      layerActivation(layerIndex, layerOutputs[layerIndex-2]); //pass in the current layer, as well as the output from the previous layer as input (-1 for prev layer, -1 to account for no layer 0)
+    }
+
+    System.out.println("Correct # is " + correctNumber + "NET OUTPUT:\n");
+    System.out.println(layerOutputs[1].length);
+    for(int i = 0; i < layerOutputs[1].length; i++){
+      System.out.println(layerOutputs[1][i]+"\n");
     }
   }
  
-  static void layerActivation(int layerIndex) {
+  static void layerActivation(int layerIndex, double[] inputs) {
     // split out the current layer from the network
     //we only have 2 layers, so layer 1 and layer 2
     //layer 0 is just the base inputs
     int srcPos, destPos, length;
-    double[] inputs;
     //assume layerindex is never less than 1 bc 0 is just inputs(no calc needed)
     //works for any nnumber of layers(?)
     if(layerIndex > 1){ //TODO: could simplify this logic if java does implicit bool stuff
-      srcPos = (layers[layerIndex-1]*(layers[layerIndex-2]+1)); //layer 1 nodes * weights + bias(elements per node) for layer 0 gives index of last element
+      srcPos = (nn.layers[layerIndex-1]*(nn.layers[layerIndex-2]+1)); //layer 1 nodes * weights + bias(elements per node) for layer 0 gives index of last element
       destPos = 0;
-      length = layers[layerIndex]*(layers[layerIndex-1]+1);
-      int ending = length+srcPos-1;
-      System.out.println("start:"+srcPos+"end:"+ending+"size:"+length+"\n");//should be 15700 and 15909
+      length = nn.layers[layerIndex]*(nn.layers[layerIndex-1]+1);
+      // int ending = length+srcPos-1;
+      // System.out.println("start:"+srcPos+"end:"+ending+"size:"+length+"\n");//should be 15700 and 15909
     } else {
       srcPos = 0; //layer 1 starts at 0
       destPos = 0;
-      length = (layers[1]*(layers[0]+1)); //last index before layer 2 starts
-      int ending = length+srcPos-1;
-      System.out.println("start:"+srcPos+"end:"+ending+"size:"+length+"\n"); //should be 0 and 15699
-      inputs = convertRowToDouble();
+      length = (nn.layers[1]*(nn.layers[0]+1)); //last index before layer 2 starts
+      // int ending = length+srcPos-1;
+      // System.out.println("start:"+srcPos+"end:"+ending+"size:"+length+"\n"); //should be 0 and 15699
     }
     double[] layerWeightsNBiases = new double[length];  //this should be an entire set of weights+a bias for a layer
-    System.arraycopy(neurNet, srcPos, layerWeightsNBiases, destPos, length); 
-    for(int nodeIndex = 0; nodeIndex < nn.layers[1]; nodeIndex++) {
-      double[] inputs = convertRowToDouble(row);
+    System.arraycopy(neurNet, srcPos, layerWeightsNBiases, destPos, length); //grabs layer subset
+    for(int nodeIndex = 0; nodeIndex < nn.layers[layerIndex]; nodeIndex++) { //on layer 1, runs 20 times 
+      int nodeNumber = nodeIndex+1; //this is fine
+      int numberOfElementsForANode = nn.layers[layerIndex-1]+1; //inputs from prev layer + bias
+      double[] weights = new double[nn.layers[layerIndex-1]];//set weights == number outputs previous layer
+      System.arraycopy(layerWeightsNBiases, nodeIndex*(nn.layers[layerIndex]+1), weights, 0, nn.layers[layerIndex-1]);// 0*20, 1*20(start at 20th index, makes sense since 0 indexed offset ends at 20)
+      //source: 785 elements per node, 
+      //destination: 784 elements, end index is one before source
+      //need to skip over bias, first node weights go to 783, bias at 784, second node starts at 785
+      double bias = layerWeightsNBiases[nodeNumber*numberOfElementsForANode-1]; // the first bias is at element 785, nodeNumber*(numberOfWeightsForNode), 1*785=785, but the index is -1
+      //node 1: 1*785-1= index 784 : correct
+      //node 2: 2*785-1= index 1569 : correct
+      //node 3: 3*785-1= index 2354 : correct
       neuronActivation(inputs, weights, bias, layerIndex, nodeIndex);
-    }
+    } 
   }
 
   //done??
@@ -232,9 +282,10 @@ public class nn {
         break;
       case "1":
         //make a net, train it on the training set
-        initNet();
         System.out.println("training");
-        runNet();
+        initNet();
+        parseDataset(nnTraining, 60000);
+        runNet(0);
         break;
       case "2":
         System.out.println("loading");
@@ -242,14 +293,14 @@ public class nn {
         break;
       case "3": //test against training data
         if(isLoaded) {
-          nn.parseDataset(nnTraining, 60000);
           System.out.println("3 runs");
+          nn.parseDataset(nnTraining, 60000);
         }
         break;
       case "4": //test against testing data
         if(isLoaded) {
-          nn.parseDataset(nnTest, 60000);
           System.out.println("4 runs");
+          nn.parseDataset(nnTest, 60000);
         }
         break;
       case "5": //save net
