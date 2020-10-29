@@ -21,12 +21,9 @@ import java.io.FileWriter;
 import java.io.BufferedReader; // buffering file input
 import java.io.IOException; // error handling
 import java.util.ArrayList;
-// import java.util.ArrayList;
-// import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Scanner; //user input
-// import java.util.stream.IntStream;
 
 
 
@@ -39,7 +36,7 @@ public class nn {
   // private static int j = 784; //number of input layer inputs
   // private static int n = 20; //layer 1 length, between 15 and 30
   // private static int k = 10; //layer 2 length, 10 for the 10 digits 0-9
-  private static int[] layers = {784, 20, 10};
+  private static int[] layers = {784, 15, 10};
   private static int arrySize = (layers[0]+1)*layers[1]+(layers[1]+1)*layers[2];
   private static double[] neurNet = new double[arrySize]; //weights and bias per node, sequentially
   private static double[] gradients = new double[arrySize];//weight and bias gradients per round, for simplicity, to be stored 
@@ -48,12 +45,14 @@ public class nn {
   private static String nnTest = "./mnist_test.csv";
   private static ArrayList<String> dataset;
   private static double[][] layerOutputs = new double[layers.length-1][]; //jagged array for reduced footprint
-  private static int batchSize = 10; //how big batches should be
+  private static int batchSize = 100; //how big batches should be
   private static double learningRate = 3.0;
   private static int[] correct = new int[10];//correct per output
   private static int[] total = new int[10];//total per number
   private static int[] oneHotVector = new int[10]; // sexy/10
   private static double[][] gradientsPerBatch = new double[batchSize][arrySize]; //first index
+  private static int epochsToRun = 6;
+  private static boolean testing = false;
   /*
     Never do this again
   */
@@ -75,6 +74,31 @@ public class nn {
   public static void main(String[] args) {
     nn.menu();
   }
+
+  /*******************
+  * Statitical output*
+  ********************/
+
+  static void printStats(){
+    String stats = "";
+    int sumAllCorrect = 0;
+    int sumAllTotal = 0;
+    for(int i = 0; i < total.length; i++){
+      stats += "For "+i+":"+correct[i]+"/"+total[i]+"\n";
+      sumAllCorrect += correct[i];
+      sumAllTotal +=total[i];
+    }
+    stats += "For all:" + sumAllCorrect + "/" + sumAllTotal + "\n";
+    double correctPercent = (double)sumAllCorrect/(double)sumAllTotal;
+    stats += " or " + correctPercent + "% accuracy";
+    System.out.println(stats);
+  }
+
+  static void resetStats(){
+    Arrays.setAll(correct, i -> { return 0; }); //reset all values to 0
+    Arrays.setAll(total, i -> { return 0; }); 
+  }
+
 
   /*******************************
   * Store and Load datasets/nets *
@@ -105,7 +129,7 @@ public class nn {
       BufferedReader nnBuffer = new BufferedReader(nnFile);
       line = nnBuffer.readLine();
       neurNet = Arrays.stream(line.split(delimiter)).mapToDouble(Double::parseDouble).toArray();
-      System.out.println(neurNet.length);
+      // System.out.println(neurNet.length);
       nnBuffer.close();
     }
     catch (IOException e) {
@@ -139,7 +163,7 @@ public class nn {
     //set random wieghts n biasses
     // double[] Arrays.stream(dataset[i].split(delimiter)).mapToDouble(Double::parseDouble).toArray();
     for(int i = 0; i < neurNet.length; i++) {
-      neurNet[i] = Math.random();
+      neurNet[i] = 2 * Math.random() - 1;
     }
     isLoaded = true;
   }
@@ -147,9 +171,6 @@ public class nn {
   /*************************************
    * stochastic gradient descent stuff *
    *************************************/
-  static void stochasticGradientDescent(){
-    
-  }
 
   //one call per node per layer
   static void biasGradientCalc(int nodeIndex, int layerIndex){
@@ -157,30 +178,31 @@ public class nn {
     double biasGradient = 0.0;
     int nodeNumber = nodeIndex + 1; //nodeNumberForCurrentlayer node(this should not change per function call)
     int nodeSize = layers[layerIndex-1] + 1;
+    int layerStartIndex;
     //bias gradient index is layers[layerIndex] because of +1 element for bias/-1 for offset, so L1 node0 (indexes) is neurNet[784]
     if(layerIndex < 2) { //middle layer
-      int lastLayerNodeSize = layers[layerIndex] + 1;//add layersize + bias
-      int lastLayerNodeIndex = 0;//nodeIndex for last layer node(this will iterate)
-      int lastLayerNodeNumber = lastLayerNodeIndex+1;
-      int lastLayerStartIndex = layers[layerIndex]*(layers[layerIndex-1]+1); //index at which the next layer begins, also useful for storage  
-      System.out.println("layerIndex should be 1:"+layerIndex+"\n");
+      int finalLayerNodeSize = layers[layerIndex] + 1;//add layersize + bias
+      int finalLayerNodeIndex = 0;//nodeIndex for last layer node(this will iterate)
+      int finalLayerNodeNumber = finalLayerNodeIndex+1;//GOTO: thsi si effectively useless
+      int finalLayerStartIndex = layers[layerIndex]*(layers[layerIndex-1]+1); //index at which the next layer begins, also useful for storage 
+      layerStartIndex = 0;
+      // System.out.println("layerIndex should be 1:"+layerIndex+"\n");
       // sum all weights*biases respective node n, in all the nodes of the next layer. Also multiply that weight by the bias
       // layers[layerIndex] is number of nodes
       double sumOfWeightsByBiasGradient = 0.0; //runnning sum of weight*bias per last layer node
-      int lastLayerBiasGradientIndex = lastLayerStartIndex+(lastLayerNodeNumber*lastLayerNodeSize-1);//index for bias gradient of current node of next layer
-      int lastLayerWeightIndex = lastLayerStartIndex+(lastLayerNodeNumber*lastLayerNodeSize-lastLayerNodeSize)+nodeIndex;//index for this node's weight in the current node of the next layer
-      while(lastLayerNodeIndex < layers[2]){ //while lastNode index < total nodes in lastLayer
-        sumOfWeightsByBiasGradient += neurNet[lastLayerWeightIndex] * gradients[lastLayerBiasGradientIndex]; //haha !
-        lastLayerWeightIndex += lastLayerNodeSize;
-        lastLayerBiasGradientIndex += lastLayerNodeSize;
-        lastLayerNodeIndex++;
+      int finalLayerBiasGradientIndex = finalLayerStartIndex+(finalLayerNodeNumber*finalLayerNodeSize)-1;//index for bias gradient of current node of next layer
+      int finalLayerWeightIndex = finalLayerStartIndex+(finalLayerNodeNumber*finalLayerNodeSize-finalLayerNodeSize)+nodeIndex;//index for this node's weight in the current node of the next layer
+      while(finalLayerNodeIndex < layers[2]){ //while lastNode index < total nodes in lastLayer
+        sumOfWeightsByBiasGradient += neurNet[finalLayerWeightIndex] * gradients[finalLayerBiasGradientIndex]; //haha !
+        finalLayerWeightIndex += finalLayerNodeSize;
+        finalLayerBiasGradientIndex += finalLayerNodeSize;
+        finalLayerNodeIndex++;
       }
-      gradients[nodeNumber*nodeSize] = sumOfWeightsByBiasGradient*layerOutputs[layerIndex-1][nodeIndex]*(1-layerOutputs[layerIndex-1][nodeIndex]);
+      gradients[layerStartIndex+(nodeNumber*nodeSize-1)] = sumOfWeightsByBiasGradient*layerOutputs[layerIndex-1][nodeIndex]*(1-layerOutputs[layerIndex-1][nodeIndex]);
       // if its node0 layer0, bias is at 784, or rather, layers[layerIndex-1]
-    } else { // last layer DONE
-      int layerStartIndex = layers[layerIndex-1]*(layers[layerIndex-2]+1);//good 15699
-      System.out.println("layer index should be 2: "+layerIndex+"/n");
-      //oneHotVector[NodeIndex] should resolved to the expected value
+    } else { // index 2
+      layerStartIndex = layers[layerIndex-1]*(layers[layerIndex-2]+1);//good 15699
+
       biasGradient = (layerOutputs[layerIndex-1][nodeIndex]-oneHotVector[nodeIndex])*layerOutputs[layerIndex-1][nodeIndex]*(1-layerOutputs[layerIndex-1][nodeIndex]);//good
       gradients[layerStartIndex+(nodeNumber*nodeSize-1)] = biasGradient;//GOOD
     }
@@ -188,31 +210,31 @@ public class nn {
 
   //once per node
   static void weightGradient(double[] inputImage, int nodeIndex, int layerIndex){
-    double weightGradient = 0.0;
+    double weightGradient;
     int nodeNumber = nodeIndex+1;
     int nodeSize = layers[layerIndex-1]+1;
     if(layerIndex < 2){ //middle layer
       //the diff is the output comes from the dataset
       int layerStartIndex = 0;
-      int imagePixelIndex = 0; //iterated
-      double biasGradient = gradients[layerStartIndex+(nodeNumber*nodeSize-1)];
-      while(imagePixelIndex < layers[layerIndex-1]){ //until through all pixels
+      double biasGradient = gradients[layerStartIndex+(nodeNumber*nodeSize)-1];
+      //GOTO: this is the PROBLEM^^^^^^^^^
+      for(int imagePixelIndex = 0;imagePixelIndex < layers[layerIndex-1]; imagePixelIndex++){ //until through all pixels
         weightGradient = inputImage[imagePixelIndex] * biasGradient;
         gradients[layerStartIndex+(nodeNumber*nodeSize-nodeSize)+imagePixelIndex] = weightGradient;//start+(xn-n)+nodeweightindex
-        imagePixelIndex++;
       }
     } else { //last layer
       int layerStartIndex = layers[layerIndex-1]*(layers[layerIndex-2]+1);
       int prevLayerNodeIndex = 0; //iterated
       double biasGradient = gradients[layerStartIndex+(nodeNumber*nodeSize-1)];
       while(prevLayerNodeIndex < layers[layerIndex-1]){ //loop thru prev nodes to get outputs(activations)
-        weightGradient = layerOutputs[layerIndex-1][prevLayerNodeIndex] * biasGradient;
+        weightGradient = layerOutputs[layerIndex-2][prevLayerNodeIndex] * biasGradient;
         gradients[layerStartIndex+(nodeNumber*nodeSize-nodeSize)+prevLayerNodeIndex] = weightGradient;//start+(xn-n)+nodeweightindex
         prevLayerNodeIndex++;
       }
     }
   }
 
+  //once per node, but a lot: nodeweightssum*batchsize
   static void newWeight(int nodeIndex, int layerIndex){
     double learningGradient = learningRate/(double)batchSize;
     int nodeNumber = nodeIndex+1;
@@ -220,25 +242,33 @@ public class nn {
     int layerStartIndex;
     if(layerIndex < 2){ //index 1
       layerStartIndex = 0;
-      for(int i = 0; i < batchSize; i++){//sum weight gradients
-        
-      }
-      neurNet[layerStartIndex+(nodeNumber*nodeSize-nodeSize)+prevLayerNodeIndex] -= 
     } else { //last layer, index 2
       layerStartIndex = layers[layerIndex-1]*(layers[layerIndex-2]+1);
-      for(int i = 0; i < batchSize; i++){//sum weight gradients
-        
-      }
     }
-    //accessor for node set in either gradient or neurNet
-
-    //accessor for first weightGradient + n
-    //start+(xn-n)+nodeweightindex
-    gradients[layerStartIndex+(nodeNumber*nodeSize-nodeSize)+prevLayerNodeIndex] //weight gradient accessor
+    for(int weightPrevLayerNodeToCurrNode = 0; weightPrevLayerNodeToCurrNode < layers[layerIndex-1]; weightPrevLayerNodeToCurrNode++){ //iterate through all weights on this node
+      double weightGradientSum = 0.0; //sum weight gradient through all runs
+      for(int batchRun = 0; batchRun < batchSize; batchRun++){//sum weight gradients
+        weightGradientSum += gradientsPerBatch[batchRun][layerStartIndex+(nodeNumber*nodeSize-nodeSize)+weightPrevLayerNodeToCurrNode];
+      }
+      neurNet[layerStartIndex+(nodeNumber*nodeSize-nodeSize)+weightPrevLayerNodeToCurrNode] -= learningGradient * weightGradientSum;
+    }
   }
 
   static void newBias(int nodeIndex, int layerIndex){
-    // biasGradient = ;
+    double learningGradient = learningRate/(double)batchSize;
+    int nodeNumber = nodeIndex+1;
+    int nodeSize = layers[layerIndex-1]+1;
+    int layerStartIndex;
+    double biasGradientSum = 0.0; //for a single bias through all runs
+    if(layerIndex < 2){ //index 1
+      layerStartIndex = 0;
+    } else { //last layer, index 2
+      layerStartIndex = layers[layerIndex-1]*(layers[layerIndex-2]+1);
+    }
+    for(int batchRun = 0; batchRun < batchSize; batchRun++){//sum weight gradients
+      biasGradientSum += gradientsPerBatch[batchRun][layerStartIndex+(nodeNumber*nodeSize-1)];
+    }
+    neurNet[layerStartIndex+(nodeNumber*nodeSize-1)] -= learningGradient * biasGradientSum;
   }
 
   /**************
@@ -263,11 +293,13 @@ public class nn {
       currIndex++;
     }
     //TODO: update new weight/biases here
-    System.out.println("layeroutputs.length is:"+layerOutputs.length+"\n");
-    for(int layerIndex = 1; layerIndex < layers.length; layerIndex++){ //increment through 2 layers
-      for(int nodeIndex = 0; nodeIndex < layers[layerIndex]; nodeIndex++ ){ //increment through 
-        newWeight(nodeIndex, layerIndex);
-        newBias(nodeIndex, layerIndex);
+    // System.out.println("layeroutputs.length is:"+layerOutputs.length+"\n");
+    if(!testing){
+      for(int layerIndex = 1; layerIndex < layers.length; layerIndex++){ //increment through 2 layers
+        for(int nodeIndex = 0; nodeIndex < layers[layerIndex]; nodeIndex++ ){ //increment through 
+          newWeight(nodeIndex, layerIndex);
+          newBias(nodeIndex, layerIndex);
+        }
       }
     }
   }
@@ -288,9 +320,10 @@ public class nn {
     int correctNumber = (int)row[0];
     System.arraycopy(row, 1, inputImage, 0, layers[0]);
     //normalize greyscale
-    for(int i = 0; i < inputImage.length; i++){
-      inputImage[i] /= 255.0; //assignment operators are the devil, and I am Faust
-    }
+    // for(int i = 0; i < inputImage.length; i++){
+    //   inputImage[i] /= 255.0; //assignment operators are the devil, and I am Faust
+    //   // System.out.println(inputImage[i]);
+    // }
     //layer 1
     layerOutputs[0] = new double[layers[1]]; //layerOutputs is layers-1 since we don't need to store L0
     layerActivation(1, inputImage);
@@ -302,6 +335,8 @@ public class nn {
     setOneHotVector(correctNumber);
     updateTotals(correctNumber);
     //TODO: I don't think these for loops are correct
+    //bias gradient before weight, bc weight uses bias
+    //seperate loops for the same reason
     for(int layerIndex = 2; layerIndex > 0; layerIndex--) { //backprop, so decrement
       for(int nodeIndex= 0; nodeIndex < layers[layerIndex]; nodeIndex++){ //increment thru current layer nodes
         biasGradientCalc(nodeIndex, layerIndex);
@@ -322,14 +357,17 @@ public class nn {
   }
 
   static void updateTotals(int correctNumber) {
-    double selectedByNet = 0;
+    int selectedByNet = 0;
+    double bestSoFar = 0.0;
     //find the highest value
-    for(int i = 0; i < layerOutputs[1].length; i++){
-      if(layerOutputs[1][i] > selectedByNet){
+    for(int i = 0; i < layers[layers.length-1]; i++){
+      // System.out.println("best is"+bestSoFar+" and layerOtputs"+layerOutputs[1][i]+"and correctnumber is"+correctNumber+"i is"+i+"\n");
+      if(layerOutputs[1][i] > bestSoFar){
+        bestSoFar = layerOutputs[1][i];
         selectedByNet = i;
       }
     }
-    nn.total[correctNumber]++; //increase the total for the number
+    nn.total[correctNumber]+=1; //increase the total for the number
     if(correctNumber == selectedByNet){
       nn.correct[correctNumber]++; //increase correct count for number
     }
@@ -382,7 +420,7 @@ public class nn {
     for(int i = 0; i < weights.length; i++) {
       preSigmoid += inputs[i] * weights[i];
     }
-    double sigmoid = 1/(1 + Math.exp((-preSigmoid)-bias));
+    double sigmoid = 1/(1 + Math.exp(-(preSigmoid+bias)));
     nn.layerOutputs[layerIndex-1][nodeIndex] = sigmoid; //store neuron's output to layerOutputs
     //its layerIndex-1 because of the lack of l0 in the layerOutputs, so everything is offset
   }
@@ -413,30 +451,46 @@ public class nn {
         break;
       case "1":
         //make a net, train it on the training set
-        System.out.println("training");
-        initNet();
+        if(!isLoaded){
+          initNet();
+        }
+        testing = false;
         parseDataset(nnTraining, 60000);
-        runNet(0,0);
+        runBatches();
+        printStats();
+        resetStats();
         break;
       case "2":
-        System.out.println("loading");
         isLoaded = nn.loadNet();
         break;
       case "3": //test against training data
         if(isLoaded) {
-          System.out.println("3 runs");
+          testing = true;
           nn.parseDataset(nnTraining, 60000);
+          runBatches();
+          printStats();
+          resetStats();
         }
         break;
       case "4": //test against testing data
         if(isLoaded) {
-          System.out.println("4 runs");
+          testing = true;
           nn.parseDataset(nnTest, 60000);
+          runBatches();
+          printStats();
+          resetStats();
         }
         break;
       case "5": //save net
         if(isLoaded) {
           nn.storeNet();
+        }
+        break;
+      case "6": //run epoch times
+        if(isLoaded) {
+          for(int i = 0; i< epochsToRun;i++){
+            runBatches();
+          }
         }
         break;
       default:
@@ -446,5 +500,4 @@ public class nn {
     nn.menu(); //call the menu again so it refreshes
     input.close(); //close the scanner(this seems to be good practice/necessary)
   }
-
 }
