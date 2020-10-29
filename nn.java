@@ -10,10 +10,6 @@
  * Initial temperature: 63 Farenhiet in Ruston, LA
  * Initial start time: 8:58 PM
  * Initial start mood: Mildly Trepidatious
- * End temperature:
- * End time:
- * End mood: 
- * Assessment:
  */
 
 import java.io.FileReader; // self-explanatory
@@ -36,26 +32,31 @@ public class nn {
   // private static int j = 784; //number of input layer inputs
   // private static int n = 20; //layer 1 length, between 15 and 30
   // private static int k = 10; //layer 2 length, 10 for the 10 digits 0-9
-  private static int[] layers = {784, 15, 10};
+  // private static int[] layers = {4, 3, 2};
+  private static int[] layers = {784, 30, 10};
   private static int arrySize = (layers[0]+1)*layers[1]+(layers[1]+1)*layers[2];
   private static double[] neurNet = new double[arrySize]; //weights and bias per node, sequentially
   private static double[] gradients = new double[arrySize];//weight and bias gradients per round, for simplicity, to be stored 
+  // private static String nnetFile = "./excelNet.csv";
   private static String nnetFile = "./neuralNet.csv";
   private static String nnTraining = "./mnist_train.csv";
+  // private static String nnTraining = "./excel.csv"; //excel version
   private static String nnTest = "./mnist_test.csv";
   private static ArrayList<String> dataset;
   private static double[][] layerOutputs = new double[layers.length-1][]; //jagged array for reduced footprint
   private static int batchSize = 100; //how big batches should be
+  // private static int batchSize = 2; //
   private static double learningRate = 3.0;
-  private static int[] correct = new int[10];//correct per output
-  private static int[] total = new int[10];//total per number
-  private static int[] oneHotVector = new int[10]; // sexy/10
+  // private static double learningRate = 10.0;
+  private static int[] correct = new int[layers[2]];//correct per output
+  private static int[] total = new int[layers[2]];//total per number
+  private static int[] oneHotVector = new int[layers[2]]; // sexy/10
   private static double[][] gradientsPerBatch = new double[batchSize][arrySize]; //first index
-  private static int epochsToRun = 6;
+  private static int epochsToRun = 5;
   private static boolean testing = false;
-  /*
-    Never do this again
-  */
+  // private static int datasetSize = 60000;
+  private static int datasetSize = 4;
+  private static double correctPercent;
   /*
   the input layer just passes the input value, then each neuron on the next layer, 
   takes all 784 inputs as an input, with a weight per input(so the weights are per incoming neuron, 
@@ -64,7 +65,6 @@ public class nn {
   785*20 indices in is where layer 2 starts, which should be 21 per neuron, 21*10. The total array size should be (784+1)*20+(20+1)*10, which is 15910
   so if I access index 15721, that's the 2nd layer, bias for the first neuron
   */
-  // why even bother with a 1d array, seems complex? Speed. Because. IDK.
 
   //THE FIRST ELEMENT OF EACH ROW IS THE ANSWER, DONT COMPUTE IT
 
@@ -89,8 +89,8 @@ public class nn {
       sumAllTotal +=total[i];
     }
     stats += "For all:" + sumAllCorrect + "/" + sumAllTotal + "\n";
-    double correctPercent = (double)sumAllCorrect/(double)sumAllTotal;
-    stats += " or " + correctPercent + "% accuracy";
+    correctPercent = (double)sumAllCorrect/(double)sumAllTotal;
+    stats += " or " + correctPercent*100 + "% accuracy";
     System.out.println(stats);
   }
 
@@ -283,7 +283,10 @@ public class nn {
     while(currIndex < dataset.size()){
       runBatch(currIndex);
       currIndex+=batchSize;
+      // TODO: llearningRate stepping
+      // learningRate *= 0.99;
     }
+    System.out.println("learning Rate is now "+learningRate);
   }
 
   static void runBatch(int currIndex){
@@ -292,7 +295,6 @@ public class nn {
       runNet(currIndex, batchRun);
       currIndex++;
     }
-    //TODO: update new weight/biases here
     // System.out.println("layeroutputs.length is:"+layerOutputs.length+"\n");
     if(!testing){
       for(int layerIndex = 1; layerIndex < layers.length; layerIndex++){ //increment through 2 layers
@@ -302,6 +304,9 @@ public class nn {
         }
       }
     }
+    //TODO COST 
+    // double cost = 0.5 * (Math.pow(oneHotVector[0]-layerOutputs[1][0], 2)+Math.pow(oneHotVector[1]-layerOutputs[1][1], 2));
+    // System.out.println("COST for oneHotVector[0]: "+cost);
   }
 
   static double[] convertRowToDouble(String row){
@@ -319,11 +324,12 @@ public class nn {
     double[] inputImage = new double[layers[0]]; //image without correctNumber
     int correctNumber = (int)row[0];
     System.arraycopy(row, 1, inputImage, 0, layers[0]);
-    //normalize greyscale
-    // for(int i = 0; i < inputImage.length; i++){
-    //   inputImage[i] /= 255.0; //assignment operators are the devil, and I am Faust
-    //   // System.out.println(inputImage[i]);
-    // }
+    // TODO: reactivate for minist data
+    // normalize greyscale
+    for(int i = 0; i < inputImage.length; i++){
+      inputImage[i] /= 255.0; 
+      // System.out.println(inputImage[i]);
+    }
     //layer 1
     layerOutputs[0] = new double[layers[1]]; //layerOutputs is layers-1 since we don't need to store L0
     layerActivation(1, inputImage);
@@ -334,7 +340,6 @@ public class nn {
     }
     setOneHotVector(correctNumber);
     updateTotals(correctNumber);
-    //TODO: I don't think these for loops are correct
     //bias gradient before weight, bc weight uses bias
     //seperate loops for the same reason
     for(int layerIndex = 2; layerIndex > 0; layerIndex--) { //backprop, so decrement
@@ -347,6 +352,10 @@ public class nn {
         weightGradient(inputImage, nodeIndex, layerIndex);
       }
     }
+    // double sumSquaredErrors;
+    // for(int layerindex=0;layerindex < layerOutputs.length;layerindex++){
+
+    // }
     //store gradients for batch run, reset
     gradientsPerBatch[batchRun] = gradients;//store run for adjustments post-batch
   }
@@ -417,7 +426,9 @@ public class nn {
     //take the weights and bias array and math it with the inputs
     //a neuron does a func to the
     double preSigmoid = 0.0;
+    // System.out.println("inputs and wiehgts are "+inputs.length+"  "+weights.length);
     for(int i = 0; i < weights.length; i++) {
+      // System.out.println("weights for L0N"+i+"to N"+"L"+layerIndex+"N"+nodeIndex+": "+inputs[i]+"*"+weights[i]);
       preSigmoid += inputs[i] * weights[i];
     }
     double sigmoid = 1/(1 + Math.exp(-(preSigmoid+bias)));
@@ -455,7 +466,7 @@ public class nn {
           initNet();
         }
         testing = false;
-        parseDataset(nnTraining, 60000);
+        parseDataset(nnTraining, datasetSize);
         runBatches();
         printStats();
         resetStats();
@@ -466,7 +477,7 @@ public class nn {
       case "3": //test against training data
         if(isLoaded) {
           testing = true;
-          nn.parseDataset(nnTraining, 60000);
+          nn.parseDataset(nnTraining, datasetSize);
           runBatches();
           printStats();
           resetStats();
@@ -475,7 +486,8 @@ public class nn {
       case "4": //test against testing data
         if(isLoaded) {
           testing = true;
-          nn.parseDataset(nnTest, 60000);
+          datasetSize = 10000;
+          nn.parseDataset(nnTest, datasetSize);
           runBatches();
           printStats();
           resetStats();
@@ -491,6 +503,7 @@ public class nn {
           for(int i = 0; i< epochsToRun;i++){
             runBatches();
           }
+          resetStats();
         }
         break;
       default:
